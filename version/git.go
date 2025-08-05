@@ -9,6 +9,7 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/go-git/go-git/v6/plumbing/storer"
+	"github.com/Masterminds/semver/v3"
 )
 
 // RepoHead provides statistics about the head commit of a git
@@ -141,12 +142,9 @@ func getTagMap(repo *git.Repository, match func(string) bool) (map[string]Tag, e
 				result[hash] = Tag{Name: tagName, When: commit.Committer.When}
 				return nil
 			}
-			// two tags on the same commit, select the larger one.
-			h0 := RepoHead{c.Name, 0, hash}
-			h1 := RepoHead{tagName, 0, hash}
-			v0, err0 := NewFromHead(&h0, "")
-			v1, err1 := NewFromHead(&h1, "")
-			if err0 != nil || (err1 == nil && v1.Compare(&v0) > 0) {
+			v0, err0 := semver.NewVersion(c.Name)
+			v1, err1 := semver.NewVersion(tagName)
+			if err0 != nil || (err1 == nil && v1.Compare(v0) > 0) {
 				result[hash] = Tag{Name: tagName, When: commit.Committer.When}
 			}
 			return nil

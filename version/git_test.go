@@ -91,13 +91,25 @@ func TestGitDescribe(t *testing.T) {
 	})
 
 	author.When = author.When.Add(1 * time.Second)
-	tag3, err := repo.CreateTag("v2.0.0", commit2, &git.CreateTagOptions{
+	tag3, err := repo.CreateTag("v2.0.0.0rc2", commit2, &git.CreateTagOptions{
+		Tagger:  author,
+		Message: "maybe the final release",
+	})
+	require.NoError(err)
+	test(&RepoHead{
+		LastTag:         tag3.Name().Short(),
+		Hash:            commit2.String(),
+		CommitsSinceTag: 0,
+	})
+
+	author.When = author.When.Add(1 * time.Second)
+	tag4, err := repo.CreateTag("v2.0.0", commit2, &git.CreateTagOptions{
 		Tagger:  author,
 		Message: "the final release",
 	})
 	require.NoError(err)
 	test(&RepoHead{
-		LastTag:         tag3.Name().Short(),
+		LastTag:         tag4.Name().Short(),
 		Hash:            commit2.String(),
 		CommitsSinceTag: 0,
 	})
@@ -107,7 +119,7 @@ func TestGitDescribe(t *testing.T) {
 	require.NoError(err)
 
 	test(&RepoHead{
-		LastTag:         tag3.Name().Short(),
+		LastTag:         tag4.Name().Short(),
 		Hash:            commit2.String(),
 		CommitsSinceTag: 0,
 	})

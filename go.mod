@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.24.4
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/go-git/go-git/v6 v6.0.0-20250728093604-6aaf1933ecab
 	github.com/stretchr/testify v1.10.0
 )
