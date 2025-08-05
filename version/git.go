@@ -3,7 +3,6 @@ package version
 import (
 	"fmt"
 	"path/filepath"
-	"time"
 
 	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
@@ -59,13 +58,51 @@ func GitDescribeRepository(repo *git.Repository, opts ...Option) (*RepoHead, err
 	ref := RepoHead{
 		Hash: head.Hash().String(),
 	}
-	tags, err := getTagMap(repo, options.matchFunc)
+
+	tags, err := repo.Tags()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve tag-list: %w", err)
+		return nil, fmt.Errorf("failed to retrieve tags: %w", err)
 	}
 
-	if tag, found := tags[ref.Hash]; found {
-		ref.LastTag = tag.Name
+	var tag string
+
+	var tagMap map[string]string = make(map[string]string)
+	if err = tags.ForEach(func(t *plumbing.Reference) error {
+		tagName := t.Name().Short()
+		if !options.matchFunc(tagName) {
+			return nil
+		}
+
+		rev, err := repo.ResolveRevision(plumbing.Revision(t.Name()))
+		if err != nil {
+			return nil
+		}
+
+		if *rev == head.Hash() {
+			tag = tagName
+		}
+
+		if existingTag, ok := tagMap[rev.String()]; ok {
+			mapVersion, err := semver.NewVersion(existingTag)
+			if err != nil {
+				return nil
+			}
+
+			tagVersion, err := semver.NewVersion(tagName)
+			if err != nil {
+				return nil
+			}
+
+			if mapVersion.LessThan(tagVersion) {
+				tagMap[rev.String()] = tagName
+			}
+		} else {
+			tagMap[rev.String()] = tagName
+		}
+
+		return nil
+	}); err == storer.ErrStop && tag != "" {
+		ref.LastTag = tag
 		return &ref, nil
 	}
 
@@ -78,9 +115,9 @@ func GitDescribeRepository(repo *git.Repository, opts ...Option) (*RepoHead, err
 	}
 
 	_ = commits.ForEach(func(c *object.Commit) error {
-		tag, ok := tags[c.Hash.String()]
+		tag, ok := tagMap[c.Hash.String()]
 		if ok {
-			ref.LastTag = tag.Name
+			ref.LastTag = tag
 			return storer.ErrStop
 		}
 		ref.CommitsSinceTag++
@@ -99,61 +136,4 @@ func GitDescribe(path string, opts ...Option) (*RepoHead, error) {
 	}
 
 	return GitDescribeRepository(repo, opts...)
-}
-
-type Tag struct {
-	Name string
-	When time.Time
-}
-
-func getTagMap(repo *git.Repository, match func(string) bool) (map[string]Tag, error) {
-	tags, err := repo.Tags()
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]Tag)
-	if err = tags.ForEach(func(ref *plumbing.Reference) error {
-		tag, err := repo.TagObject(ref.Hash())
-		switch err {
-		case nil:
-			commit, err := tag.Commit()
-			if err != nil {
-				return nil
-			}
-			hash := commit.Hash.String()
-			if t, ok := result[hash]; ok && !tag.Tagger.When.After(t.When) {
-				return nil
-			}
-			if match(tag.Name) {
-				result[hash] = Tag{Name: tag.Name, When: tag.Tagger.When}
-			}
-		case plumbing.ErrObjectNotFound:
-			commit, err := repo.CommitObject(ref.Hash())
-			if err != nil {
-				return nil
-			}
-			tagName := ref.Name().Short()
-			if !match(tagName) {
-				return nil
-			}
-			hash := commit.Hash.String()
-			c, ok := result[hash]
-			if !ok {
-				result[hash] = Tag{Name: tagName, When: commit.Committer.When}
-				return nil
-			}
-			v0, err0 := semver.NewVersion(c.Name)
-			v1, err1 := semver.NewVersion(tagName)
-			if err0 != nil || (err1 == nil && v1.Compare(v0) > 0) {
-				result[hash] = Tag{Name: tagName, When: commit.Committer.When}
-			}
-			return nil
-		default:
-			return err
-		}
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("failed to list tags: %w", err)
-	}
-	return result, nil
 }

@@ -91,7 +91,7 @@ func TestGitDescribe(t *testing.T) {
 	})
 
 	author.When = author.When.Add(1 * time.Second)
-	tag3, err := repo.CreateTag("v2.0.0.0rc2", commit2, &git.CreateTagOptions{
+	tag3, err := repo.CreateTag("v2.0.0-rc.2", commit2, &git.CreateTagOptions{
 		Tagger:  author,
 		Message: "maybe the final release",
 	})
